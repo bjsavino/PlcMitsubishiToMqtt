@@ -93,6 +93,7 @@ namespace PlcMitsubishiLibrary.TCP
             if (response.Length >= 30)
                 return Convert.ToInt32(response.Substring(22, 4), 16);
 
+            _logger.LogError("Invalid data from PLC - Data:{data}", response);
             throw new Exception("Invalid data from PLC");
         }
         public void SetMemoryValue(PlcMemory memory, int value)

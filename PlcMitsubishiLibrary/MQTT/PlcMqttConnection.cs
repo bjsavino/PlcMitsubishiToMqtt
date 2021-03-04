@@ -145,6 +145,11 @@ namespace PlcMitsubishiLibrary.MQTT
               .Build());
         }
 
+        public async void SetStatus(string status)
+        {
+            await PublishAsync($"{_topicGroupName}/{_plcName}/Status", status, true);
+        }
+
         public async Task UpdateMemoryValue(PlcMemory memory)
         {
             await PublishAsync($"{_topicGroupName}/{_plcName}/GET/{memory.FullAddress}", memory.Value.ToString(),true);

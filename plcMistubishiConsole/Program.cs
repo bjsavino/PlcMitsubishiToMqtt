@@ -42,9 +42,9 @@ namespace plcMistubishiConsole
                 {
                     try
                     {
-                        Log.Information("Loading Settings...");
+                        Log.Information("Loading Settings on {path}...",o.ConfigFile);
                         _settings = AppSettings.LoadFromConfig(o.ConfigFile);
-                        Log.Information("Settings Loaded", o);
+                        Log.Information("Settings Loaded: {@settings}", _settings);
                         Console.WriteLine();
                         UpdateTitle();
                         RunProgram();
@@ -62,7 +62,7 @@ namespace plcMistubishiConsole
                 )
                 .WithNotParsed(o =>
                 {
-                    Log.Logger.Error("Failure to read args from commandline", o);
+                    Log.Logger.Error("Failure to read args from commandline - Args:{arg}", args);
                     Log.CloseAndFlush();
                 }
                 );
@@ -131,12 +131,13 @@ namespace plcMistubishiConsole
         private static void PlcMonitoring_OnDisconnectedFromPlcDevice(object sender, EventArgs e)
         {
             UpdateTitle();
-
+            mqttmaganer.SetStatus("offline");
         }
 
         private static void PlcMonitoring_OnConnectedToPlcDevice(object sender, EventArgs e)
         {
             UpdateTitle();
+            mqttmaganer.SetStatus("online");
             lock (consoleLock)
             {
                 PrintStatus();

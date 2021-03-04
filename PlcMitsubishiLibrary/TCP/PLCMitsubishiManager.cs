@@ -66,7 +66,7 @@ namespace PlcMitsubishiLibrary.TCP
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failure to add Memory from Settings");
+                    _logger.LogError(ex, "Failure to add Memory from Settings: {@mem}",memory);
                 }
             }
 
