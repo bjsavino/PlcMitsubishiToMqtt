@@ -1,0 +1,14 @@
+{
+"MqttBroker_IPAddress":"127.0.0.1",
+"MqttBroker_Port":1883,
+"MqttBroker_User":"",
+"MqttBroker_Password":"",
+"PlcName":"PLCName",
+"PlcDevice_IpAddress":"127.0.0.1",
+"PlcDevice_Port":2121,
+"MemoriesToMonitoring": [
+	"D100",
+	"D200",
+	"M2500"
+]
+}

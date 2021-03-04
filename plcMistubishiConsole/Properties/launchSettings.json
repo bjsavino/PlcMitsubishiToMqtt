@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "plcMistubishiConsole": {
+      "commandName": "Project",
+      "commandLineArgs": "--config d:\\config.json"
+    }
+  }
+}

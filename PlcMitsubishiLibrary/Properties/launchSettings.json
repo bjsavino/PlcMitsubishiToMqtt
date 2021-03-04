@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PlcMitsubishiLibrary": {
+      "commandName": "Project",
+      "commandLineArgs": "-config d:\\config.json"
+    }
+  }
+}
