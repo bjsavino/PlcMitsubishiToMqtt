@@ -52,7 +52,9 @@ namespace plcMistubishiConsole
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Failure to load configuration File");
+                        Log.CloseAndFlush();
                     }
+                    
 
 
 
@@ -61,6 +63,7 @@ namespace plcMistubishiConsole
                 .WithNotParsed(o =>
                 {
                     Log.Logger.Error("Failure to read args from commandline", o);
+                    Log.CloseAndFlush();
                 }
                 );
 
