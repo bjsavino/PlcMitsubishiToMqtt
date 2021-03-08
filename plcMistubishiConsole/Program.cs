@@ -12,66 +12,68 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using MQTTnet.Client.Disconnecting;
+using Newtonsoft.Json;
 
 namespace plcMistubishiConsole
 {
     class Program
     {
-        static PlcMqttConnection mqttmaganer;
-        static PLCMitsubishiManager plcMonitoring;
-        static object consoleLock = new object();
-        static AppSettings _settings;
-        static string appTitle = "PLCMitsubishi to MQTT";
+        private static PlcMqttConnection _mqttmaganer;
+        private static PLCMitsubishiManager _plcMonitoring;
+        private static readonly object _consoleLock = new object();
+        private static AppSettings _settings;
+        private static readonly string _appTitle = "PLCMitsubishi to MQTT";
 
-#pragma warning disable CS1998 // Este método assíncrono não possui operadores 'await' e será executado de modo síncrono. É recomendável o uso do operador 'await' para aguardar chamadas à API desbloqueadas ou do operador 'await Task.Run(...)' para realizar um trabalho associado à CPU em um thread em segundo plano.
-        static async Task Main(string[] args)
-#pragma warning restore CS1998 // Este método assíncrono não possui operadores 'await' e será executado de modo síncrono. É recomendável o uso do operador 'await' para aguardar chamadas à API desbloqueadas ou do operador 'await Task.Run(...)' para realizar um trabalho associado à CPU em um thread em segundo plano.
-        {
+        static void Main(string[] args)
+       {
             var configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json")
                 .Build();
-
 
             Log.Logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
-            var options = new Options();
-            Parser.Default.ParseArguments<Options>(args)
-                .WithParsed(o =>
-                {
-                    try
+            try
+            {
+                var options = new Options();
+                Parser.Default.ParseArguments<Options>(args)
+                    .WithParsed(o =>
                     {
-                        Log.Information("Loading Settings on {path}...",o.ConfigFile);
-                        _settings = AppSettings.LoadFromConfig(o.ConfigFile);
+
+                        Log.Information("Loading Settings on {path}...", o.ConfigFile);
+                        _settings = AppSettings.LoadFromPath(o.ConfigFile);
                         Log.Information("Settings Loaded: {@settings}", _settings);
                         Console.WriteLine();
                         UpdateTitle();
                         RunProgram();
                     }
-                    catch (Exception ex)
+                    )
+                    .WithNotParsed(o =>
                     {
-                        Log.Error(ex, "Failure to load configuration File");
+                        Log.Logger.Error("Failure to read args from commandline - Args:{arg}", args);
                         Log.CloseAndFlush();
                     }
-                    
-
-
-
-                }
-                )
-                .WithNotParsed(o =>
-                {
-                    Log.Logger.Error("Failure to read args from commandline - Args:{arg}", args);
-                    Log.CloseAndFlush();
-                }
-                );
+                    );
+            }
+            catch (JsonReaderException jsonEx)
+            {
+                Log.Error(jsonEx, "Failure to load configuration File");
+            }
+            catch (Exception ex)
+            {
+                Log.Logger.Error(ex, "Failure on start program");
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
 
         }
 
         private static void UpdateTitle()
         {
-            Console.Title = $"{appTitle}  -  PLC Connection:{plcMonitoring?.PlcIsConnected} | Mqtt Connection:{mqttmaganer?.IsConnected}";
+            Console.Title = $"{_appTitle}  -  PLC Connection:{_plcMonitoring?.PlcIsConnected} | Mqtt Connection:{_mqttmaganer?.IsConnected}";
         }
 
         private static async void RunProgram()
@@ -80,32 +82,30 @@ namespace plcMistubishiConsole
             {
 
                 var serilogPlcMqtt = new Microsoft.Extensions.Logging.LoggerFactory().AddSerilog(Log.Logger).CreateLogger<PlcMqttConnection>();
-                mqttmaganer = new PlcMqttConnection(_settings, serilogPlcMqtt); ;
-                mqttmaganer.OnSetCommandReceived += Mqttmaganer_OnSetCommandReceived;
-                mqttmaganer.OnMqttClientConnected += Mqttmaganer_OnMqttClientConnected;
-                mqttmaganer.OnMqttClientDisconnected += Mqttmaganer_OnMqttClientDisconnected;
+                _mqttmaganer = new PlcMqttConnection(_settings, serilogPlcMqtt); ;
+                _mqttmaganer.OnSetCommandReceived += Mqttmaganer_OnSetCommandReceived;
+                _mqttmaganer.OnMqttClientConnected += Mqttmaganer_OnMqttClientConnected;
+                _mqttmaganer.OnMqttClientDisconnected += Mqttmaganer_OnMqttClientDisconnected;
                 Log.Information("Connecting to Mqtt using {ip}:{port}", _settings.MqttBroker_IPAddress, _settings.MqttBroker_Port);
-                await mqttmaganer.ConnectAsync();
+                await _mqttmaganer.ConnectAsync();
 
 
                 var serilogPlcConnector = new Microsoft.Extensions.Logging.LoggerFactory().AddSerilog(Log.Logger).CreateLogger<PLCMitsubishiConnector>();
                 PLCMitsubishiConnector plc = new PLCMitsubishiConnector(_settings, serilogPlcConnector);
 
                 var serilogPlcManager = new Microsoft.Extensions.Logging.LoggerFactory().AddSerilog(Log.Logger).CreateLogger<PLCMitsubishiManager>();
-                plcMonitoring = new PLCMitsubishiManager(plc, serilogPlcManager);
-                plcMonitoring.OnMemoryChangeValue += PlcMonitoring_OnMemoryChangeValue;
-                plcMonitoring.OnConnectedToPlcDevice += PlcMonitoring_OnConnectedToPlcDevice;
-                plcMonitoring.OnDisconnectedFromPlcDevice += PlcMonitoring_OnDisconnectedFromPlcDevice;
-                plcMonitoring.AddMemoriesFromSettings(_settings);
-
-
+                _plcMonitoring = new PLCMitsubishiManager(plc, serilogPlcManager);
+                _plcMonitoring.OnMemoryChangeValue += PlcMonitoring_OnMemoryChangeValue;
+                _plcMonitoring.OnConnectedToPlcDevice += PlcMonitoring_OnConnectedToPlcDevice;
+                _plcMonitoring.OnDisconnectedFromPlcDevice += PlcMonitoring_OnDisconnectedFromPlcDevice;
+                _plcMonitoring.AddMemoriesFromSettings(_settings);
 
                 while (true)
                 {
                     var key = Console.ReadKey(true);
                     if (key.Key == ConsoleKey.S)
                     {
-                        lock (consoleLock)
+                        lock (_consoleLock)
                         {
                             PrintStatus();
                             continue;
@@ -113,7 +113,7 @@ namespace plcMistubishiConsole
                     }
                     if (key.Key == ConsoleKey.C)
                     {
-                        lock (consoleLock)
+                        lock (_consoleLock)
                         {
                             Console.Clear();
                         }
@@ -131,14 +131,14 @@ namespace plcMistubishiConsole
         private static void PlcMonitoring_OnDisconnectedFromPlcDevice(object sender, EventArgs e)
         {
             UpdateTitle();
-            mqttmaganer.SetStatus("offline");
+            _mqttmaganer.SetStatus("offline");
         }
 
         private static void PlcMonitoring_OnConnectedToPlcDevice(object sender, EventArgs e)
         {
             UpdateTitle();
-            mqttmaganer.SetStatus("online");
-            lock (consoleLock)
+            _mqttmaganer.SetStatus("online");
+            lock (_consoleLock)
             {
                 PrintStatus();
             }
@@ -146,7 +146,7 @@ namespace plcMistubishiConsole
 
         private static void Mqttmaganer_OnMqttClientDisconnected(object sender, MqttClientDisconnectedEventArgs e)
         {
-            lock (consoleLock)
+            lock (_consoleLock)
             {
                 PrintStatus();
             }
@@ -158,8 +158,8 @@ namespace plcMistubishiConsole
             Console.WriteLine();
             Console.WriteLine("********************** Status **********************");
             Console.WriteLine($"{" Device",-23}{"Status",-8}{"IpAddress",-15}{"Port",-7}");
-            Console.WriteLine($"{" Connection to PLC:",23}{plcMonitoring.PlcIsConnected,-8}{_settings.PlcDevice_IpAddress,-15}{_settings.PlcDevice_Port,-7}");
-            Console.WriteLine($"{" Connection to MQTT:",-23}{mqttmaganer.IsConnected,-8}{_settings.MqttBroker_IPAddress,-15}{_settings.MqttBroker_Port,-7}");
+            Console.WriteLine($"{" Connection to PLC:",23}{_plcMonitoring.PlcIsConnected,-8}{_settings.PlcDevice_IpAddress,-15}{_settings.PlcDevice_Port,-7}");
+            Console.WriteLine($"{" Connection to MQTT:",-23}{_mqttmaganer.IsConnected,-8}{_settings.MqttBroker_IPAddress,-15}{_settings.MqttBroker_Port,-7}");
             Console.WriteLine("****************************************************");
             Console.WriteLine();
         }
@@ -167,9 +167,9 @@ namespace plcMistubishiConsole
         private static void Mqttmaganer_OnMqttClientConnected(object sender, EventArgs e)
         {
             Log.Information("Staring Connection to PLC using {ip}:{port}", _settings.PlcDevice_IpAddress, _settings.PlcDevice_Port);
-            plcMonitoring.Start();
+            _plcMonitoring.Start();
 
-            lock (consoleLock)
+            lock (_consoleLock)
             {
                 PrintStatus();
             }
@@ -178,17 +178,17 @@ namespace plcMistubishiConsole
 
         private static void Mqttmaganer_OnSetCommandReceived(object sender, PlcMemory e)
         {
-            if (!plcMonitoring.PlcIsConnected)
+            if (!_plcMonitoring.PlcIsConnected)
             {
-                Log.Logger.Warning("Cannot Set {mem} to {value} because PLC is not connected", e.FullAddress, e.Value);   
+                Log.Logger.Warning("Cannot Set {mem} to {value} because PLC is not connected", e.FullAddress, e.Value);
             }
 
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            plcMonitoring.SetMemoryValue(e);
+            _plcMonitoring.SetMemoryValue(e);
             stopwatch.Stop();
-            Log.Information("Setting: {mem}->{value} [ {time}ms ]", e.FullAddress, e.Value, stopwatch.ElapsedMilliseconds);
+            Log.Information("Setted: {mem}->{value} [ {time}ms ]", e.FullAddress, e.Value, stopwatch.ElapsedMilliseconds);
 
 
 
@@ -196,12 +196,12 @@ namespace plcMistubishiConsole
 
         private static async void PlcMonitoring_OnMemoryChangeValue(object sender, PlcMemory e)
         {
-            if (mqttmaganer.IsConnected == false)
+            if (_mqttmaganer.IsConnected == false)
             {
                 Log.Warning("*MqttClient is not connected.");
                 return;
             }
-            await mqttmaganer.UpdateMemoryValue(e);
+            await _mqttmaganer.UpdateMemoryValue(e);
         }
     }
 }
