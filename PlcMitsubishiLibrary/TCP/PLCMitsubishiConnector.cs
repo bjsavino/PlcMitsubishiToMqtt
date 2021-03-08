@@ -18,9 +18,9 @@ namespace PlcMitsubishiLibrary.TCP
         private readonly string _iPAddress;
         private readonly int _port;
         private readonly ILogger<PLCMitsubishiConnector> _logger;
-        private object lockConnection = new object();
-        private object lockSend = new object();
-        private bool tryingReconnection = false;
+        private object _lockConnection = new object();
+        private object _lockSend = new object();
+        private bool _tryingReconnection = false;
 
         public bool IsConnected => (_tcpClient.Client is null) ? false : _tcpClient.Client.Connected;
 
@@ -35,23 +35,23 @@ namespace PlcMitsubishiLibrary.TCP
         {
             while (_tcpClient.Connected == false)
             {
-                lock (lockConnection)
+                lock (_lockConnection)
                 {
                     try
                     {
                         _tcpClient = new TcpClient();
                         _tcpClient.Connect(_iPAddress, _port);
                         _logger.LogInformation("Connection to PLC established");
-                        tryingReconnection = false;
+                        _tryingReconnection = false;
 
                     }
                     catch (SocketException ex)
                     {
                         int delaySeconds = 5;
-                        if (tryingReconnection == false)
+                        if (_tryingReconnection == false)
                         {
                             _logger.LogWarning(ex.Message);
-                            tryingReconnection = true;
+                            _tryingReconnection = true;
                         }
                         _logger.LogInformation("Try Reconnection again each {timereconection} seconds", 5);
                         Thread.Sleep(delaySeconds * 1000);
@@ -96,11 +96,24 @@ namespace PlcMitsubishiLibrary.TCP
             _logger.LogError("Invalid data from PLC - Data:{data}", response);
             throw new Exception("Invalid data from PLC");
         }
+        public async Task<int> GetMemoryValueAsync(PlcMemory memory)
+        {
+
+            string msg = "500000FF03FF000018001004010000" + memory.GetMemoryType() + "*" + memory.GetMemoryAddress() + "0002";
+            string response = await SendAsync(msg);
+
+
+            if (response.Length >= 30)
+                return Convert.ToInt32(response.Substring(22, 4), 16);
+
+            _logger.LogError("Invalid data from PLC - Data:{data}", response);
+            throw new Exception("Invalid data from PLC");
+        }
         public void SetMemoryValue(PlcMemory memory, int value)
         {
             string hexvalue = value.ToString("X").PadLeft(4, '0');
             string msg = "500000FF03FF000020001014010000" + memory.GetMemoryType() + "*" + memory.GetMemoryAddress() + "0002" + hexvalue + "0000";
-            var a = this.Send(msg);
+            _ = Send(msg);
         }
 
         private string Send(string message)
@@ -111,7 +124,7 @@ namespace PlcMitsubishiLibrary.TCP
             }
             string dataString;
 
-            lock (lockSend)
+            lock (_lockSend)
             {
 
                 byte[] data = Encoding.ASCII.GetBytes(message);
@@ -121,7 +134,25 @@ namespace PlcMitsubishiLibrary.TCP
                 byte[] receivedData = new byte[50];
                 _tcpClient.Client.Receive(receivedData, SocketFlags.None);
                 dataString = Encoding.ASCII.GetString(receivedData).Replace("\0", "").Trim();
+                return dataString;
             }
+        }
+        private async Task<string> SendAsync(string message)
+        {
+            if (_tcpClient.Connected == false)
+            {
+                Connect();
+            }
+            string dataString;
+
+            byte[] data = Encoding.ASCII.GetBytes(message);
+
+            await _tcpClient.Client.SendAsync(data, SocketFlags.None);
+
+            byte[] receivedData = new byte[50];
+            await _tcpClient.Client.ReceiveAsync(receivedData, SocketFlags.None);
+            dataString = Encoding.ASCII.GetString(receivedData).Replace("\0", "").Trim();
+
 
             return dataString;
 

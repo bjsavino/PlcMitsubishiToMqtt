@@ -24,6 +24,9 @@ namespace PlcMitsubishiLibrary.TCP
         public event EventHandler OnConnectedToPlcDevice;
         public event EventHandler OnDisconnectedFromPlcDevice;
 
+        private readonly object _addNewMemoryLock = new object();
+        private readonly AppSettings _appSettings;
+
         public bool PlcIsConnected { get => _plcConnector.IsConnected; }
         public PLCMitsubishiManager(IPLCMitsubishiConnector plcConnector, ILogger<PLCMitsubishiManager> logger)
         {
@@ -34,7 +37,6 @@ namespace PlcMitsubishiLibrary.TCP
 
         public void Start()
         {
-
             _plcConnector.Connect();
             OnConnectedToPlcDevice?.Invoke(this, null);
             Task.Run(MonitoringPlc, _tokenSource.Token);
@@ -50,13 +52,15 @@ namespace PlcMitsubishiLibrary.TCP
         {
             if (_memoriesToMonitoring.FirstOrDefault(m => m.FullAddress == memory.FullAddress) is null)
             {
-                _memoriesToMonitoring.Add(memory);
+                lock (_addNewMemoryLock)
+                {
+                    _memoriesToMonitoring.Add(memory);
+                }
             }
         }
 
         public void AddMemoriesFromSettings(AppSettings appSettings)
         {
-
             foreach (var memory in appSettings.MemoriesToMonitoring)
             {
                 try
@@ -66,7 +70,7 @@ namespace PlcMitsubishiLibrary.TCP
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failure to add Memory from Settings: {@mem}",memory);
+                    _logger.LogError(ex, "Failure to add Memory from Settings: {@mem}", memory);
                 }
             }
 
@@ -82,8 +86,7 @@ namespace PlcMitsubishiLibrary.TCP
             if (memoryFromList is null)
                 AddMemoryToMonitoring(plcMemory);
 
-            //_memoriesToMonitoring[_memoriesToMonitoring.IndexOf(memoryFromList)] = plcMemory;
-            memoryFromList = plcMemory;
+           memoryFromList = plcMemory;
             _plcConnector.SetMemoryValue(plcMemory, plcMemory.Value);
         }
 
@@ -100,17 +103,24 @@ namespace PlcMitsubishiLibrary.TCP
 
                 try
                 {
-                    foreach (var memory in _memoriesToMonitoring)
+                    lock (_addNewMemoryLock)
                     {
-                        var stopwatch = new Stopwatch();
-                        stopwatch.Start();
-                        var newValue = _plcConnector.GetMemoryValue(memory);
-                        if (memory.Value != newValue || wasReadFirstTime == false)
+
+                        foreach (var memory in _memoriesToMonitoring)
                         {
-                            memory.Value = newValue;
-                            stopwatch.Stop();
-                            _logger.LogInformation("Changed: {mem}->{value} [ {time}ms ]", memory.FullAddress, memory.Value, stopwatch.ElapsedMilliseconds);
-                            OnMemoryChangeValue?.Invoke(this, memory);
+                            var stopwatch = new Stopwatch();
+                            stopwatch.Start();
+                            //var newValue = _plcConnector.GetMemoryValue(memory);
+
+                            var newValue = _plcConnector.GetMemoryValue(memory);
+                            if (memory.Value != newValue || wasReadFirstTime == false)
+                            {
+                                memory.Value = newValue;
+                                stopwatch.Stop();
+                                _logger.LogInformation("Changed: {mem}->{value} [ {time}ms ]", memory.FullAddress, memory.Value, stopwatch.ElapsedMilliseconds);
+                                OnMemoryChangeValue?.Invoke(this, memory);
+                            }
+                            Thread.Sleep(10);
                         }
                     }
                 }

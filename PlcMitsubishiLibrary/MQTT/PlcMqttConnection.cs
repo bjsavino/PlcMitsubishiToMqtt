@@ -49,9 +49,7 @@ namespace PlcMitsubishiLibrary.MQTT
         {
             try
             {
-
-
-                string clientId = Guid.NewGuid().ToString();
+                string clientId = _plcName + "-" + Guid.NewGuid().ToString();
                 bool mqttSecure = false;
                 var messageBuilder = new MqttClientOptionsBuilder()
                   .WithClientId(clientId)
@@ -74,22 +72,20 @@ namespace PlcMitsubishiLibrary.MQTT
                   .Build();
 
                 await _client.StartAsync(managedOptions);
-              
+
                 _client.UseApplicationMessageReceivedHandler(e => OnMessageReceived(e));
                 _client.UseConnectedHandler(e => OnConnected(e));
                 _client.UseDisconnectedHandler(e => OnDisconnected(e));
             }
             catch (Exception ex)
             {
-
                 _logger.LogError(ex, "Failure to Connect to MQTT Broker");
             }
-
         }
 
         private async void OnConnected(MqttClientConnectedEventArgs e)
         {
-            await PublishAsync($"{_topicGroupName}/{_plcName}/Status", "online",true);
+            await PublishAsync($"{_topicGroupName}/{_plcName}/Status", "online", true);
             await SubscribeAsync($"{_topicGroupName}/{_plcName}/SET/+");
             _logger.LogInformation("Mqtt Client Connected");
             OnMqttClientConnected?.Invoke(this, e);
@@ -97,7 +93,6 @@ namespace PlcMitsubishiLibrary.MQTT
 
         private void OnDisconnected(MqttClientDisconnectedEventArgs e)
         {
-            
             _logger.LogWarning("Mqtt Client was Disconnected - Reason:{reason} | Autentication:{auth}", e.Reason, e.AuthenticateResult);
             OnMqttClientDisconnected?.Invoke(this, e);
         }
@@ -106,7 +101,6 @@ namespace PlcMitsubishiLibrary.MQTT
             try
             {
                 string topic = e.ApplicationMessage.Topic;
-
                 if (string.IsNullOrWhiteSpace(topic) == false)
                 {
                     string memoryAddress = topic.Split('/').Last().ToUpper();
@@ -115,8 +109,6 @@ namespace PlcMitsubishiLibrary.MQTT
                     PlcMemory memoryToSet = new PlcMemory(memoryAddress, memoryValue);
 
                     OnSetCommandReceived?.Invoke(this, memoryToSet);
-                    //    Console.WriteLine($"Topic: {topic}. Message Received: {payload}");
-
                 }
 
             }
@@ -152,7 +144,7 @@ namespace PlcMitsubishiLibrary.MQTT
 
         public async Task UpdateMemoryValue(PlcMemory memory)
         {
-            await PublishAsync($"{_topicGroupName}/{_plcName}/GET/{memory.FullAddress}", memory.Value.ToString(),true);
+            await PublishAsync($"{_topicGroupName}/{_plcName}/GET/{memory.FullAddress}", memory.Value.ToString(), true);
         }
 
     }

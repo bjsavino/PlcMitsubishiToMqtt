@@ -16,19 +16,13 @@ namespace PlcMitsubishiLibrary.Utils
         public string PlcDevice_IpAddress { get; set; }
         public int PlcDevice_Port { get; set; }
         public List<string> MemoriesToMonitoring { get; set; }
-        //private List<PlcMemory> MemoriesToMonitoring { get; set; }
 
-        public static AppSettings LoadFromConfig(string filepath)
+        public static AppSettings LoadFromPath(string filepath)
         {
-            
             string contentFile = File.ReadAllText(filepath);
             var appSettings = JsonConvert.DeserializeObject<AppSettings>(contentFile);
-         //   json
-          //  var appSettings = new AppSettings();
+
             return appSettings;
         }
-
-
-
     }
 }
